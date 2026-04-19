@@ -1,0 +1,213 @@
+-- ============================================
+-- ZÄME 5000 – Complete Database Schema
+-- ============================================
+
+-- PROFILES
+CREATE TABLE profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  avatar_url TEXT,
+  bouncer_words TEXT[] DEFAULT '{}',
+  role TEXT DEFAULT 'member' CHECK (role IN ('admin','organizer','member')),
+  theme TEXT DEFAULT 'cardboard' CHECK (theme IN ('cardboard','ocean','grunge','piggy')),
+  signature_sound_url TEXT,
+  approved BOOLEAN DEFAULT false,
+  batzen NUMERIC DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- EVENTS
+CREATE TABLE events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  location TEXT,
+  event_date TIMESTAMPTZ NOT NULL,
+  cost NUMERIC DEFAULT 0,
+  organizer_id UUID REFERENCES profiles(id),
+  is_tournament BOOLEAN DEFAULT false,
+  is_mandatory BOOLEAN DEFAULT false,
+  hero_image_url TEXT,
+  status TEXT DEFAULT 'upcoming' CHECK (status IN ('upcoming','active','past')),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RSVPS
+CREATE TABLE rsvps (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('confirmed','declined','pending')),
+  plus_one BOOLEAN DEFAULT false,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(event_id, user_id)
+);
+
+-- TRANSACTIONS (Batzenkonto)
+CREATE TABLE transactions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  amount NUMERIC NOT NULL,
+  description TEXT,
+  receipt_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RATINGS (Stimmungsbild)
+CREATE TABLE ratings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  stars INT CHECK (stars >= 1 AND stars <= 5),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(event_id, user_id)
+);
+
+-- IDEAS (Anonym)
+CREATE TABLE ideas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- TOURNAMENT MATCHES
+CREATE TABLE tournament_matches (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  round INT NOT NULL,
+  match_number INT NOT NULL,
+  player1_id UUID REFERENCES profiles(id),
+  player2_id UUID REFERENCES profiles(id),
+  score1 INT DEFAULT 0,
+  score2 INT DEFAULT 0,
+  winner_id UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- MEDIA
+CREATE TABLE media (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  media_type TEXT DEFAULT 'photo' CHECK (media_type IN ('photo','sticker')),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- QUOTES
+CREATE TABLE quotes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- BADGES
+CREATE TABLE badges (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT DEFAULT '🏅'
+);
+
+-- USER BADGES
+CREATE TABLE user_badges (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  badge_id UUID REFERENCES badges(id) ON DELETE CASCADE,
+  awarded_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, badge_id)
+);
+
+-- PINGS
+CREATE TABLE pings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  sender_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  activity TEXT NOT NULL,
+  location TEXT,
+  time_text TEXT,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- PING JOINS
+CREATE TABLE ping_joins (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  ping_id UUID REFERENCES pings(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(ping_id, user_id)
+);
+
+-- HALL OF FAME
+CREATE TABLE hall_of_fame (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  year INT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('sticker_of_year','quote_of_year','schnappsidee')),
+  title TEXT NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================
+-- SEED: Default Badges
+-- ============================================
+INSERT INTO badges (name, description, icon) VALUES
+  ('Erster Event', 'Am ersten Event teilgenommen', '🎉'),
+  ('Grillmeister', '3 Grill-Events organisiert', '🔥'),
+  ('Beerpong-Legende', 'Ein Turnier gewonnen', '🏆'),
+  ('Batzen-König', 'Über 100 CHF eingezahlt', '💰'),
+  ('Ping-Pong', '10 Pings gesendet', '📡'),
+  ('Fotograf', '20 Fotos hochgeladen', '📸'),
+  ('Stammgast', 'An 10 Events teilgenommen', '⭐'),
+  ('Schnappsidee', 'Beste Idee des Jahres', '💡');
+
+-- ============================================
+-- ROW LEVEL SECURITY
+-- ============================================
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rsvps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ideas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_matches ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE badges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_badges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ping_joins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hall_of_fame ENABLE ROW LEVEL SECURITY;
+
+-- Public read for most tables (custom auth - no Supabase Auth)
+-- We use anon key + service role for admin ops
+CREATE POLICY "Public read profiles" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Public insert profiles" ON profiles FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update profiles" ON profiles FOR UPDATE USING (true);
+
+CREATE POLICY "Public read events" ON events FOR SELECT USING (true);
+CREATE POLICY "Public insert events" ON events FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update events" ON events FOR UPDATE USING (true);
+
+CREATE POLICY "Public all rsvps" ON rsvps FOR ALL USING (true);
+CREATE POLICY "Public all transactions" ON transactions FOR ALL USING (true);
+CREATE POLICY "Public all ratings" ON ratings FOR ALL USING (true);
+CREATE POLICY "Public all ideas" ON ideas FOR ALL USING (true);
+CREATE POLICY "Public all tournament" ON tournament_matches FOR ALL USING (true);
+CREATE POLICY "Public all media" ON media FOR ALL USING (true);
+CREATE POLICY "Public all quotes" ON quotes FOR ALL USING (true);
+CREATE POLICY "Public read badges" ON badges FOR SELECT USING (true);
+CREATE POLICY "Public all user_badges" ON user_badges FOR ALL USING (true);
+CREATE POLICY "Public all pings" ON pings FOR ALL USING (true);
+CREATE POLICY "Public all ping_joins" ON ping_joins FOR ALL USING (true);
+CREATE POLICY "Public read hof" ON hall_of_fame FOR SELECT USING (true);
+CREATE POLICY "Public insert hof" ON hall_of_fame FOR INSERT WITH CHECK (true);
+
+-- Storage bucket (run in Supabase dashboard or via API)
+-- CREATE BUCKET 'media' WITH public = true;
