@@ -1,5 +1,5 @@
 // ============================================
-// ZÄME 5000 – Ping / Buzzer Module
+// ZÄME 5000 – Ping / Buzzer Module (Updated)
 // ============================================
 
 import {
@@ -10,6 +10,8 @@ import {
   deactivatePing,
   getPingJoins,
   joinPing,
+  getDurationText,
+  getLanguageFlag,
   timeAgo
 } from './supabase.js';
 
@@ -25,7 +27,7 @@ let pollingInterval = null;
 let lastPingIds = new Set();
 let selectedActivity = null;
 let selectedLocation = null;
-let selectedTime = null;
+let selectedDuration = null;
 let customActivityActive = false;
 let customLocationActive = false;
 let isFirstPoll = true;
@@ -33,26 +35,20 @@ let notificationQueue = [];
 let isShowingNotification = false;
 let currentNotifPingId = null;
 
-// Polling config
-const POLL_INTERVAL = 10000; // 10 seconds
-const PING_MAX_AGE = 2 * 60 * 60 * 1000; // 2 hours
+const POLL_INTERVAL = 10000;
+const PING_MAX_AGE = 2 * 60 * 60 * 1000;
 
 // ---- DOM REFS ----
 const els = {};
 
 function cacheDom() {
-  // Composer
   els.activityChips = document.getElementById('ping-activity-chips');
   els.activityCustom = document.getElementById('ping-activity-custom');
   els.locationChips = document.getElementById('ping-location-chips');
   els.locationCustom = document.getElementById('ping-location-custom');
-  els.timeChips = document.getElementById('ping-time-chips');
+  els.durationChips = document.getElementById('ping-duration-chips');
   els.sendBtn = document.getElementById('ping-send');
-
-  // Feed
   els.pingList = document.getElementById('ping-list');
-
-  // Notification
   els.notification = document.getElementById('ping-notification');
   els.notifAvatar = document.getElementById('ping-notif-avatar');
   els.notifSender = document.getElementById('ping-notif-sender');
@@ -67,54 +63,41 @@ export function initPings() {
   cacheDom();
   bindComposerEvents();
   bindNotificationEvents();
-
-  // Start polling
   startPolling();
 
-  // Pause/resume on visibility
   onVisibilityChange((visible) => {
-    if (visible) {
-      startPolling();
-    } else {
-      stopPolling();
-    }
+    if (visible) startPolling();
+    else stopPolling();
   });
 
-  // Refresh feed when profile view opens
   onViewChange((view) => {
-    if (view === 'profile') {
-      fetchAndRenderPings();
-    }
+    if (view === 'profile') fetchAndRenderPings();
   });
 }
 
 // ============================================
-// COMPOSER (Activity, Location, Time Selection)
+// COMPOSER
 // ============================================
 
 function bindComposerEvents() {
-  // Activity chips
   if (els.activityChips) {
     els.activityChips.querySelectorAll('.chip').forEach(chip => {
       chip.addEventListener('click', () => handleActivityChip(chip));
     });
   }
 
-  // Location chips
   if (els.locationChips) {
     els.locationChips.querySelectorAll('.chip').forEach(chip => {
       chip.addEventListener('click', () => handleLocationChip(chip));
     });
   }
 
-  // Time chips
-  if (els.timeChips) {
-    els.timeChips.querySelectorAll('.chip').forEach(chip => {
-      chip.addEventListener('click', () => handleTimeChip(chip));
+  if (els.durationChips) {
+    els.durationChips.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => handleDurationChip(chip));
     });
   }
 
-  // Custom inputs change
   if (els.activityCustom) {
     els.activityCustom.addEventListener('input', () => {
       if (customActivityActive) {
@@ -133,7 +116,6 @@ function bindComposerEvents() {
     });
   }
 
-  // Send button
   if (els.sendBtn) {
     els.sendBtn.addEventListener('click', handleSendPing);
   }
@@ -141,12 +123,9 @@ function bindComposerEvents() {
 
 function handleActivityChip(chip) {
   const value = chip.dataset.value;
-
-  // Deselect all in group
   els.activityChips.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
 
   if (value === 'custom') {
-    // Show custom input
     customActivityActive = true;
     els.activityCustom.classList.remove('hidden');
     els.activityCustom.style.display = '';
@@ -154,13 +133,10 @@ function handleActivityChip(chip) {
     chip.classList.add('selected');
     selectedActivity = els.activityCustom.value.trim() || null;
   } else {
-    // Hide custom input
     customActivityActive = false;
     els.activityCustom.classList.add('hidden');
     els.activityCustom.style.display = 'none';
     els.activityCustom.value = '';
-
-    // Toggle selection
     if (selectedActivity === value) {
       selectedActivity = null;
     } else {
@@ -168,14 +144,12 @@ function handleActivityChip(chip) {
       chip.classList.add('selected');
     }
   }
-
   animateChip(chip);
   validateComposer();
 }
 
 function handleLocationChip(chip) {
   const value = chip.dataset.value;
-
   els.locationChips.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
 
   if (value === 'custom') {
@@ -190,7 +164,6 @@ function handleLocationChip(chip) {
     els.locationCustom.classList.add('hidden');
     els.locationCustom.style.display = 'none';
     els.locationCustom.value = '';
-
     if (selectedLocation === value) {
       selectedLocation = null;
     } else {
@@ -198,56 +171,45 @@ function handleLocationChip(chip) {
       chip.classList.add('selected');
     }
   }
-
   animateChip(chip);
   validateComposer();
 }
 
-function handleTimeChip(chip) {
+function handleDurationChip(chip) {
   const value = chip.dataset.value;
+  els.durationChips.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
 
-  els.timeChips.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-
-  if (selectedTime === value) {
-    selectedTime = null;
+  if (selectedDuration === value) {
+    selectedDuration = null;
   } else {
-    selectedTime = value;
+    selectedDuration = value;
     chip.classList.add('selected');
   }
-
   animateChip(chip);
   validateComposer();
 }
 
 function animateChip(chip) {
   chip.style.transform = 'scale(0.9)';
-  setTimeout(() => {
-    chip.style.transform = '';
-  }, 120);
+  setTimeout(() => { chip.style.transform = ''; }, 120);
 }
 
 function validateComposer() {
-  const valid = selectedActivity && selectedTime;
-  if (els.sendBtn) {
-    els.sendBtn.disabled = !valid;
-  }
+  const valid = selectedActivity && selectedDuration;
+  if (els.sendBtn) els.sendBtn.disabled = !valid;
 }
 
 function resetComposer() {
   selectedActivity = null;
   selectedLocation = null;
-  selectedTime = null;
+  selectedDuration = null;
   customActivityActive = false;
   customLocationActive = false;
 
-  // Reset all chips
-  [els.activityChips, els.locationChips, els.timeChips].forEach(group => {
-    if (group) {
-      group.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
-    }
+  [els.activityChips, els.locationChips, els.durationChips].forEach(group => {
+    if (group) group.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
   });
 
-  // Hide custom inputs
   if (els.activityCustom) {
     els.activityCustom.classList.add('hidden');
     els.activityCustom.style.display = 'none';
@@ -258,7 +220,6 @@ function resetComposer() {
     els.locationCustom.style.display = 'none';
     els.locationCustom.value = '';
   }
-
   validateComposer();
 }
 
@@ -268,44 +229,37 @@ function resetComposer() {
 
 async function handleSendPing() {
   const session = getSession();
-  if (!session) {
-    showToast('Bitte zerscht ilogge.', 'warn');
+  if (!session) return;
+
+  if (!selectedActivity || !selectedDuration) {
+    showToast('Wähl Aktivität und Duur!', 'warn');
     return;
   }
 
-  if (!selectedActivity || !selectedTime) {
-    showToast('Wähl mindestens Aktivität und Ziit!', 'warn');
-    return;
-  }
-
-  // Disable button with animation
   els.sendBtn.disabled = true;
   els.sendBtn.textContent = '📡 Wird gsendet...';
-  els.sendBtn.style.transform = 'scale(0.96)';
 
   try {
     await createPing({
       sender_id: session.id,
       activity: selectedActivity,
       location: selectedLocation || null,
-      time_text: selectedTime
+      time_text: selectedDuration // Store duration value (15/30/60/120/999)
     });
 
-    // Success animation
     els.sendBtn.textContent = '✅ Gsendet!';
     els.sendBtn.style.background = 'var(--success)';
-    pulseElement(els.sendBtn);
-
     showToast('Ping gsendet! 📡', 'success', 2000);
 
-    // Reset after delay
+    // Also send push notification to others
+    await sendPushToOthers(session, selectedActivity, selectedLocation, selectedDuration);
+
     setTimeout(() => {
       els.sendBtn.style.background = '';
       els.sendBtn.textContent = '📡 PING SÄNDÄ';
       resetComposer();
     }, 1500);
 
-    // Refresh feed
     await fetchAndRenderPings();
 
   } catch (e) {
@@ -313,25 +267,65 @@ async function handleSendPing() {
     showToast('Fehler bim Sändä.', 'error');
     els.sendBtn.disabled = false;
     els.sendBtn.textContent = '📡 PING SÄNDÄ';
-    els.sendBtn.style.transform = '';
   }
 }
 
 // ============================================
-// POLLING SYSTEM
+// PUSH NOTIFICATIONS
+// ============================================
+
+async function sendPushToOthers(session, activity, location, duration) {
+  // This will be handled by service worker + subscription
+  // For now, in-app notifications are the primary mechanism
+  // Push will be added via sw.js
+}
+
+export async function requestNotificationPermission() {
+  if (!('Notification' in window)) {
+    console.warn('Notifications not supported');
+    return false;
+  }
+
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+export function showNativeNotification(title, body, icon) {
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const notif = new Notification(title, {
+      body,
+      icon: icon || '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      vibrate: [100, 50, 100],
+      tag: 'zaeme-ping',
+      renotify: true
+    });
+
+    notif.onclick = () => {
+      window.focus();
+      notif.close();
+    };
+
+    setTimeout(() => notif.close(), 8000);
+  } catch (e) {
+    console.warn('Native notification error:', e);
+  }
+}
+
+// ============================================
+// POLLING
 // ============================================
 
 export function startPolling() {
   stopPolling();
-
-  // Initial fetch
   fetchAndRenderPings();
-
-  // Poll every 10 seconds
   pollingInterval = setInterval(() => {
-    if (isPageVisible()) {
-      fetchAndRenderPings();
-    }
+    if (isPageVisible()) fetchAndRenderPings();
   }, POLL_INTERVAL);
 }
 
@@ -345,23 +339,29 @@ export function stopPolling() {
 async function fetchAndRenderPings() {
   try {
     const pings = await getActivePings();
-
-    // Filter out expired pings (older than 2 hours)
     const now = Date.now();
-    const activePings = pings.filter(p => {
-      const age = now - new Date(p.created_at).getTime();
-      return age < PING_MAX_AGE;
-    });
+    const activePings = pings.filter(p => (now - new Date(p.created_at).getTime()) < PING_MAX_AGE);
 
-    // Detect new pings for notifications
     const session = getSession();
     const currentIds = new Set(activePings.map(p => p.id));
 
     if (!isFirstPoll && session) {
       activePings.forEach(ping => {
         if (!lastPingIds.has(ping.id) && ping.sender_id !== session.id) {
-          // New ping from someone else! Queue notification
           queueNotification(ping);
+
+          // Also native notification if page not visible
+          if (!isPageVisible()) {
+            const senderName = ping.sender?.display_name || 'Öpper';
+            const senderLang = ping.sender?.language || 'de';
+            const durationText = getDurationText(ping.time_text, senderLang);
+            const flag = getLanguageFlag(senderLang);
+            const locationStr = ping.location ? ` · ${ping.location}` : '';
+            showNativeNotification(
+              `📡 ${senderName}`,
+              `${ping.activity}${locationStr} · ${flag} ${durationText}`
+            );
+          }
         }
       });
     }
@@ -369,7 +369,6 @@ async function fetchAndRenderPings() {
     isFirstPoll = false;
     lastPingIds = currentIds;
 
-    // Fetch joins for each ping
     const pingsWithJoins = await Promise.all(
       activePings.map(async (ping) => {
         try {
@@ -381,10 +380,7 @@ async function fetchAndRenderPings() {
       })
     );
 
-    // Render feed
     renderPingFeed(pingsWithJoins);
-
-    // Process notification queue
     processNotificationQueue();
 
   } catch (e) {
@@ -393,7 +389,7 @@ async function fetchAndRenderPings() {
 }
 
 // ============================================
-// PING FEED RENDERING
+// PING FEED
 // ============================================
 
 function renderPingFeed(pings) {
@@ -410,8 +406,6 @@ function renderPingFeed(pings) {
   }
 
   const session = getSession();
-
-  // Check if content actually changed (prevent unnecessary re-renders)
   const newContent = pings.map(p => `${p.id}-${p.joins?.length || 0}`).join(',');
   if (els.pingList.dataset.contentHash === newContent) return;
   els.pingList.dataset.contentHash = newContent;
@@ -425,11 +419,14 @@ function renderPingFeed(pings) {
 
     const senderName = ping.sender?.display_name || 'Unbekannt';
     const senderAvatar = ping.sender?.avatar_url || generateMiniAvatar(senderName);
+    const senderLang = ping.sender?.language || 'de';
     const locationStr = ping.location ? ` · ${ping.location}` : '';
-    const timeStr = ping.time_text || '';
     const createdAgo = timeAgo(ping.created_at);
 
-    // Build joiners text
+    // Duration in sender's language
+    const durationText = getDurationText(ping.time_text, senderLang);
+    const flag = getLanguageFlag(senderLang);
+
     const joins = ping.joins || [];
     let joinersHtml = '';
     if (joins.length > 0) {
@@ -441,11 +438,9 @@ function renderPingFeed(pings) {
       }
     }
 
-    // Check if current user already joined
     const alreadyJoined = session && joins.some(j => j.user_id === session.id);
     const isMine = session && ping.sender_id === session.id;
 
-    // Join button
     let joinBtnHtml = '';
     if (!isMine && !alreadyJoined) {
       joinBtnHtml = `<button class="btn-primary btn-scrapbook btn-small ping-item-join" data-ping-id="${ping.id}">Join ⚡</button>`;
@@ -459,7 +454,8 @@ function renderPingFeed(pings) {
       <img class="ping-item-avatar" src="${senderAvatar}" alt="${escapeHtml(senderName)}" onerror="this.src='${generateMiniAvatar(senderName)}'" />
       <div class="ping-item-body">
         <span class="ping-item-sender">${escapeHtml(senderName)}</span>
-        <span class="ping-item-detail">${escapeHtml(ping.activity)}${locationStr} · ${escapeHtml(timeStr)}</span>
+        <span class="ping-item-detail">${escapeHtml(ping.activity)}${locationStr}</span>
+        <span class="ping-item-duration">${flag} ${durationText}</span>
         ${joinersHtml}
       </div>
       ${joinBtnHtml}
@@ -469,24 +465,18 @@ function renderPingFeed(pings) {
     els.pingList.appendChild(item);
   });
 
-  // Bind join/deactivate buttons
   bindPingActions();
 }
 
 function bindPingActions() {
   if (!els.pingList) return;
-
   els.pingList.querySelectorAll('.ping-item-join[data-ping-id]').forEach(btn => {
-    // Remove old listeners by cloning
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
-
     newBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const pingId = newBtn.dataset.pingId;
-      const action = newBtn.dataset.action;
-
-      if (action === 'deactivate') {
+      if (newBtn.dataset.action === 'deactivate') {
         await handleDeactivatePing(pingId);
       } else {
         await handleJoinPing(pingId, newBtn);
@@ -496,7 +486,7 @@ function bindPingActions() {
 }
 
 // ============================================
-// JOIN / DEACTIVATE PING
+// JOIN / DEACTIVATE
 // ============================================
 
 async function handleJoinPing(pingId, btnEl) {
@@ -508,20 +498,14 @@ async function handleJoinPing(pingId, btnEl) {
 
   try {
     await joinPing(pingId, session.id);
-
-    // Optimistic update
     btnEl.textContent = '✅ Derby';
     btnEl.className = 'ping-item-join';
     btnEl.style.cssText = 'font-size:0.75rem;color:var(--success);font-weight:700;';
     btnEl.disabled = true;
-
     showToast('Bisch derby! ⚡', 'success', 1500);
-
-    // Refresh feed
     setTimeout(() => fetchAndRenderPings(), 500);
-
   } catch (e) {
-    console.error('Join ping error:', e);
+    console.error('Join error:', e);
     showToast('Fehler bim Joine.', 'error');
     btnEl.disabled = false;
     btnEl.textContent = 'Join ⚡';
@@ -532,8 +516,6 @@ async function handleDeactivatePing(pingId) {
   try {
     await deactivatePing(pingId);
     showToast('Ping deaktiviert.', 'info', 1500);
-
-    // Remove from feed
     const item = els.pingList?.querySelector(`[data-ping-id="${pingId}"]`);
     if (item) {
       item.style.transition = 'all 0.3s ease';
@@ -541,61 +523,48 @@ async function handleDeactivatePing(pingId) {
       item.style.transform = 'translateX(50px)';
       setTimeout(() => {
         item.remove();
-        // Check if feed is now empty
-        if (els.pingList && els.pingList.children.length === 0) {
-          renderPingFeed([]);
-        }
+        if (els.pingList && els.pingList.children.length === 0) renderPingFeed([]);
       }, 300);
     }
-
     lastPingIds.delete(pingId);
-
   } catch (e) {
-    console.error('Deactivate ping error:', e);
-    showToast('Fehler bim Deaktiviere.', 'error');
+    console.error('Deactivate error:', e);
+    showToast('Fehler.', 'error');
   }
 }
 
 // ============================================
-// IN-APP NOTIFICATION SYSTEM
+// IN-APP NOTIFICATION (iOS-Style)
 // ============================================
 
 function bindNotificationEvents() {
-  // Join from notification
   if (els.notifJoin) {
     els.notifJoin.addEventListener('click', async () => {
-      if (currentNotifPingId) {
-        const session = getSession();
-        if (session) {
-          els.notifJoin.disabled = true;
-          els.notifJoin.textContent = '...';
+      if (!currentNotifPingId) return;
+      const session = getSession();
+      if (!session) return;
 
-          try {
-            await joinPing(currentNotifPingId, session.id);
-            els.notifJoin.textContent = '✅';
-            showToast('Bisch derby! ⚡', 'success', 1500);
-            setTimeout(() => dismissNotification(), 800);
-            fetchAndRenderPings();
-          } catch (e) {
-            console.error('Join from notif error:', e);
-            els.notifJoin.disabled = false;
-            els.notifJoin.textContent = 'Join ⚡';
-          }
-        }
+      els.notifJoin.disabled = true;
+      els.notifJoin.textContent = '...';
+
+      try {
+        await joinPing(currentNotifPingId, session.id);
+        els.notifJoin.textContent = '✅';
+        showToast('Bisch derby! ⚡', 'success', 1500);
+        setTimeout(() => dismissNotification(), 800);
+        fetchAndRenderPings();
+      } catch (e) {
+        els.notifJoin.disabled = false;
+        els.notifJoin.textContent = 'Join ⚡';
       }
     });
   }
 
-  // Dismiss notification
   if (els.notifDismiss) {
     els.notifDismiss.addEventListener('click', dismissNotification);
   }
 
-  // Auto-dismiss on tap outside
-  if (els.notification) {
-    // Swipe up to dismiss
-    setupNotifSwipe();
-  }
+  if (els.notification) setupNotifSwipe();
 }
 
 function queueNotification(ping) {
@@ -616,124 +585,92 @@ async function showNextNotification() {
   isShowingNotification = true;
   const ping = notificationQueue.shift();
 
-  // Get sender info (might already be in ping.sender)
   let senderName = ping.sender?.display_name || 'Unbekannt';
   let senderAvatar = ping.sender?.avatar_url || generateMiniAvatar(senderName);
+  let senderLang = ping.sender?.language || 'de';
 
-  // If sender info missing, fetch it
   if (!ping.sender) {
     try {
       const profile = await getProfileById(ping.sender_id);
       if (profile) {
         senderName = profile.display_name;
         senderAvatar = profile.avatar_url || generateMiniAvatar(senderName);
+        senderLang = profile.language || 'de';
       }
-    } catch (e) {
-      console.warn('Could not fetch ping sender:', e);
-    }
+    } catch (e) { /* ignore */ }
   }
 
   currentNotifPingId = ping.id;
 
-  // Populate notification
+  const durationText = getDurationText(ping.time_text, senderLang);
+  const flag = getLanguageFlag(senderLang);
+  const locationStr = ping.location ? ` · ${ping.location}` : '';
+  const text = `${ping.activity}${locationStr} · ${flag} ${durationText}`;
+
   if (els.notifAvatar) {
     els.notifAvatar.src = senderAvatar;
-    els.notifAvatar.onerror = () => {
-      els.notifAvatar.src = generateMiniAvatar(senderName);
-    };
+    els.notifAvatar.onerror = () => { els.notifAvatar.src = generateMiniAvatar(senderName); };
   }
   if (els.notifSender) els.notifSender.textContent = senderName;
-
-  const locationStr = ping.location ? ` · ${ping.location}` : '';
-  const text = `${ping.activity}${locationStr} · ${ping.time_text || 'Jetzt'}`;
   if (els.notifText) els.notifText.textContent = text;
 
-  // Reset join button
   if (els.notifJoin) {
     els.notifJoin.disabled = false;
     els.notifJoin.textContent = 'Join ⚡';
   }
 
-  // Show notification
   if (els.notification) {
     els.notification.classList.remove('hidden');
     els.notification.style.display = '';
     els.notification.style.animation = 'none';
-    els.notification.offsetHeight; // reflow
-    els.notification.style.animation = 'notif-slide-down 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards';
+    els.notification.offsetHeight;
+    els.notification.style.animation = 'notif-slide-down 0.4s cubic-bezier(0.4,0,0.2,1) forwards';
   }
 
-  // Vibrate if supported
-  if (navigator.vibrate) {
-    navigator.vibrate([100, 50, 100]);
-  }
-
-  // Play notification sound
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
   playNotifSound();
 
-  // Auto-dismiss after 8 seconds
   setTimeout(() => {
-    if (isShowingNotification && currentNotifPingId === ping.id) {
-      dismissNotification();
-    }
+    if (isShowingNotification && currentNotifPingId === ping.id) dismissNotification();
   }, 8000);
 }
 
 function dismissNotification() {
   if (!els.notification) return;
-
-  els.notification.style.animation = 'notif-slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards';
-
+  els.notification.style.animation = 'notif-slide-up 0.3s cubic-bezier(0.4,0,0.2,1) forwards';
   setTimeout(() => {
     els.notification.classList.add('hidden');
     els.notification.style.display = 'none';
     els.notification.style.animation = '';
     currentNotifPingId = null;
     isShowingNotification = false;
-
-    // Show next in queue
     processNotificationQueue();
   }, 300);
 }
 
 function playNotifSound() {
   try {
-    // Create a simple notification beep using Web Audio API
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
+    const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-
-    oscillator.connect(gain);
+    osc.connect(gain);
     gain.connect(ctx.destination);
-
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime); // A5
-    oscillator.frequency.setValueAtTime(1100, ctx.currentTime + 0.1); // C#6
-
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.3);
-
-    // Cleanup
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
     setTimeout(() => ctx.close(), 500);
-  } catch (e) {
-    // Audio not available, that's ok
-    console.warn('Could not play notification sound:', e);
-  }
+  } catch (e) { /* ok */ }
 }
 
-// ---- SWIPE TO DISMISS NOTIFICATION ----
-
 function setupNotifSwipe() {
-  if (!els.notification) return;
-
-  let startY = 0;
-  let isDragging = false;
-
-  const inner = els.notification.querySelector('.ping-notif-inner');
+  const inner = els.notification?.querySelector('.ping-notif-inner');
   if (!inner) return;
+
+  let startY = 0, isDragging = false;
 
   inner.addEventListener('touchstart', (e) => {
     startY = e.touches[0].clientY;
@@ -744,8 +681,6 @@ function setupNotifSwipe() {
   inner.addEventListener('touchmove', (e) => {
     if (!isDragging) return;
     const diff = e.touches[0].clientY - startY;
-
-    // Only allow upward swipe
     if (diff < 0) {
       inner.style.transform = `translateY(${diff}px)`;
       inner.style.opacity = Math.max(0, 1 + diff / 100);
@@ -755,57 +690,16 @@ function setupNotifSwipe() {
   inner.addEventListener('touchend', (e) => {
     if (!isDragging) return;
     isDragging = false;
-
-    const diff = e.changedTouches[0].clientY - startY;
     inner.style.transition = '';
-
+    const diff = e.changedTouches[0].clientY - startY;
     if (diff < -40) {
-      // Swipe up threshold met – dismiss
       dismissNotification();
     } else {
-      // Snap back
       inner.style.transform = '';
       inner.style.opacity = '';
     }
   }, { passive: true });
 }
-
-// ============================================
-// NOTIFICATION ANIMATIONS (inject)
-// ============================================
-
-const notifStyles = document.createElement('style');
-notifStyles.textContent = `
-  @keyframes notif-slide-down {
-    from {
-      opacity: 0;
-      transform: translateY(-100%);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes notif-slide-up {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(-100%);
-    }
-  }
-
-  /* Ping send button pulse */
-  @keyframes ping-pulse {
-    0% { box-shadow: 0 0 0 0 var(--accent); }
-    70% { box-shadow: 0 0 0 15px transparent; }
-    100% { box-shadow: 0 0 0 0 transparent; }
-  }
-`;
-document.head.appendChild(notifStyles);
 
 // ============================================
 // UTILITIES
@@ -822,22 +716,17 @@ function generateMiniAvatar(name = '') {
   const initial = (name.charAt(0) || '?').toUpperCase();
   const colors = ['#c8a06e', '#3a8fb7', '#e06080', '#6b9e5f', '#c8a050'];
   const color = colors[initial.charCodeAt(0) % colors.length];
-  return `data:image/svg+xml,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-      <rect width="48" height="48" rx="24" fill="${color}"/>
-      <text x="24" y="30" text-anchor="middle" fill="white" font-family="sans-serif" font-size="20" font-weight="bold">${initial}</text>
-    </svg>
-  `)}`;
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><rect width="48" height="48" rx="24" fill="${color}"/><text x="24" y="30" text-anchor="middle" fill="white" font-family="sans-serif" font-size="20" font-weight="bold">${initial}</text></svg>`)}`;
 }
 
-function pulseElement(el) {
-  el.style.animation = 'ping-pulse 0.6s ease-out';
-  setTimeout(() => {
-    el.style.animation = '';
-  }, 600);
-}
-
-// ---- CLEANUP ----
+// Inject animations
+const notifStyles = document.createElement('style');
+notifStyles.textContent = `
+  @keyframes notif-slide-down { from { opacity:0; transform:translateY(-100%); } to { opacity:1; transform:translateY(0); } }
+  @keyframes notif-slide-up { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-100%); } }
+  .ping-item-duration { font-size:0.78rem; color:var(--accent); font-weight:600; display:block; margin-top:2px; }
+`;
+document.head.appendChild(notifStyles);
 
 export function destroyPings() {
   stopPolling();
