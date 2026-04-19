@@ -2,8 +2,8 @@
 // ZÄME 5000 – Supabase Client & DB Helpers
 // ============================================
 
-const SUPABASE_URL = 'https://DEIN-PROJEKT.supabase.co';
-const SUPABASE_ANON_KEY = 'DEIN-ANON-KEY';
+const SUPABASE_URL = 'https://wmrcqvurwiqxaenshjct.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtcmNxdnVyd2lxeGFlbnNoamN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1ODc2MjksImV4cCI6MjA5MjE2MzYyOX0.6DMhEsMiVJLBKH4ksEpw2Q8VtOek9T12-lzuWUJ8UVE';
 
 // Lightweight Supabase REST wrapper (kein SDK nötig)
 const headers = {
