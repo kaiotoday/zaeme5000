@@ -5,7 +5,6 @@
 const SUPABASE_URL = 'https://wmrcqvurwiqxaenshjct.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtcmNxdnVyd2lxeGFlbnNoamN0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1ODc2MjksImV4cCI6MjA5MjE2MzYyOX0.6DMhEsMiVJLBKH4ksEpw2Q8VtOek9T12-lzuWUJ8UVE';
 
-// Lightweight Supabase REST wrapper (kein SDK nötig)
 const headers = {
   'apikey': SUPABASE_ANON_KEY,
   'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
@@ -35,7 +34,6 @@ async function insert(table, data) {
 }
 
 async function update(table, match, data) {
-  // match = 'id=eq.xxx' or 'user_id=eq.xxx&event_id=eq.yyy'
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${match}`, {
     method: 'PATCH',
     headers,
@@ -52,16 +50,6 @@ async function remove(table, match) {
   });
   if (!res.ok) throw new Error(`DELETE ${table} failed: ${res.status}`);
   return true;
-}
-
-async function rpc(fnName, params = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params)
-  });
-  if (!res.ok) throw new Error(`RPC ${fnName} failed: ${res.status}`);
-  return res.json();
 }
 
 // ---- STORAGE HELPERS ----
@@ -81,15 +69,9 @@ async function uploadFile(bucket, path, file) {
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
 }
 
-function getPublicUrl(bucket, path) {
-  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
-}
-
 // ============================================
-// DOMAIN-SPECIFIC DB FUNCTIONS
+// PROFILES
 // ============================================
-
-// ---- PROFILES ----
 
 export async function getProfiles() {
   return query('profiles', 'select=*&order=display_name.asc');
@@ -114,7 +96,6 @@ export async function getProfileById(id) {
 }
 
 export async function createProfile(data) {
-  // data: { username, display_name, bouncer_words }
   const rows = await insert('profiles', data);
   return rows[0];
 }
@@ -132,8 +113,6 @@ export async function searchProfiles(term) {
   return query('profiles', `select=*&approved=eq.true&username=ilike.*${encodeURIComponent(term)}*&limit=5`);
 }
 
-// ---- AVATAR UPLOAD ----
-
 export async function uploadAvatar(userId, file) {
   const ext = file.name.split('.').pop();
   const path = `avatars/${userId}.${ext}`;
@@ -142,7 +121,9 @@ export async function uploadAvatar(userId, file) {
   return url;
 }
 
-// ---- EVENTS ----
+// ============================================
+// EVENTS
+// ============================================
 
 export async function getEvents() {
   return query('events', 'select=*,organizer:profiles!organizer_id(id,display_name,avatar_url)&order=event_date.desc');
@@ -187,7 +168,9 @@ export async function uploadEventImage(eventId, file) {
   return url;
 }
 
-// ---- RSVPS ----
+// ============================================
+// RSVPS
+// ============================================
 
 export async function getRsvpsForEvent(eventId) {
   return query('rsvps', `select=*,user:profiles!user_id(id,display_name,avatar_url)&event_id=eq.${eventId}&order=created_at.asc`);
@@ -199,7 +182,6 @@ export async function getUserRsvp(eventId, userId) {
 }
 
 export async function upsertRsvp(eventId, userId, data) {
-  // Check if exists
   const existing = await getUserRsvp(eventId, userId);
   if (existing) {
     const rows = await update('rsvps', `id=eq.${existing.id}`, data);
@@ -210,7 +192,9 @@ export async function upsertRsvp(eventId, userId, data) {
   }
 }
 
-// ---- TRANSACTIONS (Batzenkonto) ----
+// ============================================
+// TRANSACTIONS (Batzenkonto)
+// ============================================
 
 export async function getTransactionsForEvent(eventId) {
   return query('transactions', `select=*,user:profiles!user_id(id,display_name)&event_id=eq.${eventId}&order=created_at.desc`);
@@ -221,16 +205,12 @@ export async function getUserTransactions(userId) {
 }
 
 export async function createTransaction(data) {
-  // data: { event_id, user_id, amount, description, receipt_url? }
   const rows = await insert('transactions', data);
-
-  // Update batzen on profile
   const profile = await getProfileById(data.user_id);
   if (profile) {
     const newBatzen = parseFloat(profile.batzen || 0) + parseFloat(data.amount);
     await updateProfile(data.user_id, { batzen: newBatzen });
   }
-
   return rows[0];
 }
 
@@ -241,7 +221,21 @@ export async function uploadReceipt(eventId, file) {
   return uploadFile('media', path, file);
 }
 
-// ---- RATINGS ----
+// Get all receipts for an event (from transactions that have receipt_url)
+export async function getReceiptsForEvent(eventId) {
+  const txs = await getTransactionsForEvent(eventId);
+  return txs.filter(tx => tx.receipt_url).map(tx => ({
+    url: tx.receipt_url,
+    user: tx.user?.display_name || 'Unbekannt',
+    amount: tx.amount,
+    description: tx.description,
+    date: tx.created_at
+  }));
+}
+
+// ============================================
+// RATINGS
+// ============================================
 
 export async function getRatingsForEvent(eventId) {
   return query('ratings', `select=*&event_id=eq.${eventId}`);
@@ -250,55 +244,53 @@ export async function getRatingsForEvent(eventId) {
 export async function upsertRating(eventId, userId, stars) {
   const existing = await query('ratings', `select=*&event_id=eq.${eventId}&user_id=eq.${userId}`);
   if (existing.length > 0) {
-    const rows = await update('ratings', `id=eq.${existing[0].id}`, { stars });
-    return rows[0];
+    return (await update('ratings', `id=eq.${existing[0].id}`, { stars }))[0];
   }
-  const rows = await insert('ratings', { event_id: eventId, user_id: userId, stars });
-  return rows[0];
+  return (await insert('ratings', { event_id: eventId, user_id: userId, stars }))[0];
 }
 
 export async function getAverageRating(eventId) {
   const ratings = await getRatingsForEvent(eventId);
   if (ratings.length === 0) return null;
   const sum = ratings.reduce((s, r) => s + r.stars, 0);
-  return {
-    average: (sum / ratings.length).toFixed(1),
-    count: ratings.length
-  };
+  return { average: (sum / ratings.length).toFixed(1), count: ratings.length };
 }
 
-// ---- IDEAS ----
+// ============================================
+// IDEAS
+// ============================================
 
 export async function getIdeas() {
   return query('ideas', 'select=*&order=created_at.desc&limit=30');
 }
 
 export async function createIdea(text) {
-  const rows = await insert('ideas', { text });
-  return rows[0];
+  return (await insert('ideas', { text }))[0];
 }
 
-// ---- TOURNAMENT ----
+// ============================================
+// TOURNAMENT
+// ============================================
 
 export async function getMatchesForEvent(eventId) {
   return query('tournament_matches', `select=*,player1:profiles!player1_id(id,display_name),player2:profiles!player2_id(id,display_name)&event_id=eq.${eventId}&order=round.asc,match_number.asc`);
 }
 
 export async function createMatch(data) {
-  const rows = await insert('tournament_matches', data);
-  return rows[0];
+  return (await insert('tournament_matches', data))[0];
 }
 
 export async function updateMatch(matchId, data) {
-  const rows = await update('tournament_matches', `id=eq.${matchId}`, data);
-  return rows[0];
+  return (await update('tournament_matches', `id=eq.${matchId}`, data))[0];
 }
 
 export async function clearTournament(eventId) {
   return remove('tournament_matches', `event_id=eq.${eventId}`);
 }
 
-// ---- MEDIA ----
+// ============================================
+// MEDIA
+// ============================================
 
 export async function getMediaForEvent(eventId) {
   return query('media', `select=*,user:profiles!user_id(id,display_name)&event_id=eq.${eventId}&order=created_at.desc`);
@@ -307,29 +299,26 @@ export async function getMediaForEvent(eventId) {
 export async function uploadMedia(eventId, userId, file, mediaType = 'photo') {
   const ext = file.name.split('.').pop();
   const ts = Date.now();
-  const path = `photos/${eventId}/${ts}_${Math.random().toString(36).slice(2,6)}.${ext}`;
+  const path = `photos/${eventId}/${ts}_${Math.random().toString(36).slice(2, 6)}.${ext}`;
   const url = await uploadFile('media', path, file);
-  const rows = await insert('media', {
-    event_id: eventId,
-    user_id: userId,
-    url,
-    media_type: mediaType
-  });
-  return rows[0];
+  return (await insert('media', { event_id: eventId, user_id: userId, url, media_type: mediaType }))[0];
 }
 
-// ---- QUOTES ----
+// ============================================
+// QUOTES
+// ============================================
 
 export async function getQuotesForEvent(eventId) {
   return query('quotes', `select=*,user:profiles!user_id(id,display_name)&event_id=eq.${eventId}&order=created_at.desc`);
 }
 
 export async function createQuote(eventId, userId, text) {
-  const rows = await insert('quotes', { event_id: eventId, user_id: userId, text });
-  return rows[0];
+  return (await insert('quotes', { event_id: eventId, user_id: userId, text }))[0];
 }
 
-// ---- BADGES ----
+// ============================================
+// BADGES (= Events wo me derby gsi isch)
+// ============================================
 
 export async function getAllBadges() {
   return query('badges', 'select=*&order=name.asc');
@@ -341,25 +330,29 @@ export async function getUserBadges(userId) {
 
 export async function awardBadge(userId, badgeId) {
   try {
-    const rows = await insert('user_badges', { user_id: userId, badge_id: badgeId });
-    return rows[0];
+    return (await insert('user_badges', { user_id: userId, badge_id: badgeId }))[0];
   } catch (e) {
-    // Unique constraint = already has badge
     console.warn('Badge already awarded:', e.message);
     return null;
   }
 }
 
-// ---- PINGS ----
+// Get events user attended (confirmed RSVPs)
+export async function getUserAttendedEvents(userId) {
+  const rsvps = await query('rsvps', `select=*,event:events!event_id(id,title,event_date,hero_image_url)&user_id=eq.${userId}&status=eq.confirmed&order=created_at.desc`);
+  return rsvps.map(r => r.event).filter(Boolean);
+}
+
+// ============================================
+// PINGS
+// ============================================
 
 export async function getActivePings() {
-  return query('pings', `select=*,sender:profiles!sender_id(id,display_name,avatar_url)&active=eq.true&order=created_at.desc&limit=20`);
+  return query('pings', `select=*,sender:profiles!sender_id(id,display_name,avatar_url,language)&active=eq.true&order=created_at.desc&limit=20`);
 }
 
 export async function createPing(data) {
-  // data: { sender_id, activity, location, time_text }
-  const rows = await insert('pings', data);
-  return rows[0];
+  return (await insert('pings', data))[0];
 }
 
 export async function deactivatePing(pingId) {
@@ -372,35 +365,77 @@ export async function getPingJoins(pingId) {
 
 export async function joinPing(pingId, userId) {
   try {
-    const rows = await insert('ping_joins', { ping_id: pingId, user_id: userId });
-    return rows[0];
+    return (await insert('ping_joins', { ping_id: pingId, user_id: userId }))[0];
   } catch (e) {
     console.warn('Already joined:', e.message);
     return null;
   }
 }
 
-// ---- HALL OF FAME ----
+// ============================================
+// HALL OF FAME
+// ============================================
 
 export async function getHallOfFame() {
   return query('hall_of_fame', 'select=*&order=year.desc,category.asc');
 }
 
 export async function createHofEntry(data) {
-  const rows = await insert('hall_of_fame', data);
-  return rows[0];
+  return (await insert('hall_of_fame', data))[0];
 }
 
-// ---- SIGNATURE SOUND ----
+// ============================================
+// MULTILINGUAL DURATION
+// ============================================
 
-export async function uploadSound(userId, file) {
-  const path = `sounds/${userId}.mp3`;
-  const url = await uploadFile('media', path, file);
-  await updateProfile(userId, { signature_sound_url: url });
-  return url;
+const DURATION_TRANSLATIONS = {
+  de: {
+    '15': '15 Minute',
+    '30': '30 Minute',
+    '60': '1 Stund',
+    '120': '2 Stund',
+    '999': 'Länger'
+  },
+  pt: {
+    '15': '15 minutos',
+    '30': '30 minutos',
+    '60': '1 hora',
+    '120': '2 horas',
+    '999': 'Mais tempo'
+  },
+  it: {
+    '15': '15 minuti',
+    '30': '30 minuti',
+    '60': '1 ora',
+    '120': '2 ore',
+    '999': 'Di più'
+  },
+  es: {
+    '15': '15 minutos',
+    '30': '30 minutos',
+    '60': '1 hora',
+    '120': '2 horas',
+    '999': 'Más tiempo'
+  }
+};
+
+export function getDurationText(durationValue, language = 'de') {
+  const lang = DURATION_TRANSLATIONS[language] || DURATION_TRANSLATIONS['de'];
+  return lang[String(durationValue)] || lang['60'];
 }
 
-// ---- AUTH HELPER (Bouncer Code Validation) ----
+export function getLanguageFlag(lang) {
+  switch (lang) {
+    case 'pt': return '🇧🇷';
+    case 'it': return '🇮🇹';
+    case 'es': return '🇪🇸';
+    default: return '🇨🇭';
+  }
+}
+
+// ============================================
+// AUTH HELPERS
+// ============================================
 
 export async function validateBouncer(username, selectedWords) {
   const profile = await getProfileByUsername(username);
@@ -413,11 +448,8 @@ export async function validateBouncer(username, selectedWords) {
     stored.every((w, i) => w === selectedWords[i]);
 
   if (!match) return { success: false, error: 'Falscher Bouncer Code!' };
-
   return { success: true, profile };
 }
-
-// ---- BOUNCER WORD POOL ----
 
 export const BOUNCER_WORDS = [
   'Fondue', 'Gletscher', 'Raclette', 'Bünzli', 'Cervelat',
@@ -427,7 +459,7 @@ export const BOUNCER_WORDS = [
 ];
 
 // ============================================
-// SESSION (Local Storage based)
+// SESSION (Local Storage)
 // ============================================
 
 const SESSION_KEY = 'zaeme5000_session';
@@ -439,6 +471,7 @@ export function saveSession(profile) {
     display_name: profile.display_name,
     role: profile.role,
     theme: profile.theme,
+    language: profile.language || 'de',
     avatar_url: profile.avatar_url,
     timestamp: Date.now()
   }));
@@ -449,7 +482,6 @@ export function getSession() {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw);
-    // Session expires after 30 days
     if (Date.now() - session.timestamp > 30 * 24 * 60 * 60 * 1000) {
       clearSession();
       return null;
@@ -473,21 +505,18 @@ export function updateSessionField(key, value) {
   }
 }
 
-// ---- HELPERS ----
+// ============================================
+// UTILITIES
+// ============================================
 
 export function formatDate(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('de-CH', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
+  return new Date(dateStr).toLocaleDateString('de-CH', {
+    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
   });
 }
 
 export function formatTime(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+  return new Date(dateStr).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function formatDateTime(dateStr) {
@@ -495,32 +524,24 @@ export function formatDateTime(dateStr) {
 }
 
 export function timeAgo(dateStr) {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = now - then;
+  const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'grad ebe';
   if (mins < 60) return `vor ${mins} Min`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `vor ${hours} Std`;
-  const days = Math.floor(hours / 24);
-  return `vor ${days} Täg`;
+  return `vor ${Math.floor(hours / 24)} Täg`;
 }
 
 export function getCountdown(dateStr) {
-  const now = Date.now();
-  const target = new Date(dateStr).getTime();
-  const diff = target - now;
-
+  const diff = new Date(dateStr).getTime() - Date.now();
   if (diff <= 0) return 'Jetzt!';
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-  if (days > 0) return `${days}d ${hours}h ${mins}m`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
+  const d = Math.floor(diff / 86400000);
+  const h = Math.floor((diff % 86400000) / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 export function eventEmoji(title = '') {
@@ -528,14 +549,14 @@ export function eventEmoji(title = '') {
   if (t.includes('grill') || t.includes('bbq')) return '🔥';
   if (t.includes('beer') || t.includes('pong')) return '🍺';
   if (t.includes('ausflug') || t.includes('trip')) return '🚗';
-  if (t.includes('turnier') || t.includes('tournament')) return '🏆';
+  if (t.includes('turnier')) return '🏆';
   if (t.includes('weihnacht') || t.includes('xmas')) return '🎄';
   if (t.includes('party') || t.includes('feier')) return '🎉';
   if (t.includes('wandern') || t.includes('hike')) return '🥾';
   if (t.includes('ski') || t.includes('snow')) return '🎿';
-  if (t.includes('schwimm') || t.includes('see') || t.includes('badi')) return '🏊';
-  if (t.includes('film') || t.includes('movie') || t.includes('kino')) return '🎬';
-  if (t.includes('essen') || t.includes('dinner') || t.includes('food')) return '🍕';
-  if (t.includes('game') || t.includes('zock') || t.includes('spiel')) return '🎮';
+  if (t.includes('schwimm') || t.includes('badi')) return '🏊';
+  if (t.includes('kino') || t.includes('film')) return '🎬';
+  if (t.includes('essen') || t.includes('food')) return '🍕';
+  if (t.includes('game') || t.includes('zock')) return '🎮';
   return '📅';
 }
