@@ -32,20 +32,17 @@
         <h1 class="marker-title">Zäme 5000</h1>
         <p class="auth-subtitle">Wer bisch du?</p>
 
-        <!-- Mode Toggle -->
         <div class="auth-toggle">
           <button class="auth-toggle-btn active" data-mode="login">Login</button>
           <button class="auth-toggle-btn" data-mode="register">Registriere</button>
         </div>
 
-        <!-- Name Input with Autocomplete -->
         <div class="input-group">
           <label class="label-marker">Din Name</label>
           <input type="text" id="auth-name" class="scrapbook-input" placeholder="Name iitippä..." autocomplete="off" />
           <div id="auth-suggestions" class="suggestions-dropdown hidden"></div>
         </div>
 
-        <!-- Display Name (Register only) -->
         <div id="register-fields" class="hidden">
           <div class="input-group">
             <label class="label-marker">Anzeigename</label>
@@ -53,7 +50,6 @@
           </div>
         </div>
 
-        <!-- Bouncer Code Grid -->
         <div class="input-group">
           <label class="label-marker">Bouncer Code (wähl 3 Wörter)</label>
           <div id="bouncer-grid" class="bouncer-grid"></div>
@@ -79,31 +75,14 @@
       <div class="top-bar-inner">
         <h2 class="top-bar-title marker-title">Zäme 5000</h2>
         <div class="top-bar-actions">
-          <button id="btn-idea" class="icon-btn idea-btn" title="Idee einwerfe">💡</button>
+          <!-- + Button: nur für Admin/Orga sichtbar -->
+          <button id="btn-create-event" class="icon-btn create-event-btn hidden" title="Event erstelle">➕</button>
         </div>
       </div>
     </header>
 
     <!-- ===== HOME VIEW ===== -->
     <main id="view-home" class="view">
-      <!-- Personal Stats Card -->
-      <section class="stats-card torn-paper-card">
-        <div class="tape tape-center"></div>
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-value" id="stat-batzen">0</span>
-            <span class="stat-label">CHF Batze</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="stat-badges">0</span>
-            <span class="stat-label">Badges</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="stat-next-orga">—</span>
-            <span class="stat-label">Nächste Orga</span>
-          </div>
-        </div>
-      </section>
 
       <!-- Hero Banner (Next Event) -->
       <section id="hero-event" class="hero-banner torn-paper-card">
@@ -151,6 +130,40 @@
         <span class="profile-role" id="profile-role">member</span>
       </section>
 
+      <!-- Batzen / Cash Overview -->
+      <section class="batzen-overview torn-paper-card">
+        <div class="pin pin-yellow"></div>
+        <h3 class="section-title marker-title">💰 Batzenkonto</h3>
+        <div class="batzen-display">
+          <div class="batzen-total" id="batzen-total">CHF 0.00</div>
+          <div class="batzen-details">
+            <div class="batzen-detail positive">
+              <span class="batzen-label">Iizahlt</span>
+              <span class="batzen-value" id="batzen-plus">+ CHF 0</span>
+            </div>
+            <div class="batzen-detail negative">
+              <span class="batzen-label">Usgeh</span>
+              <span class="batzen-value" id="batzen-minus">- CHF 0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Language Selector -->
+      <section class="language-section torn-paper-card">
+        <div class="tape tape-right"></div>
+        <h3 class="section-title marker-title">🌍 Mini Spraach</h3>
+        <p style="font-size:0.82rem;color:var(--text-light);margin-bottom:10px;">
+          D'Ziit bi dine Pings wird in dinere Spraach aazeigt.
+        </p>
+        <div class="language-options">
+          <button class="theme-chip lang-chip" data-lang="de">🇨🇭 Düütsch</button>
+          <button class="theme-chip lang-chip" data-lang="pt">🇧🇷 Português</button>
+          <button class="theme-chip lang-chip" data-lang="it">🇮🇹 Italiano</button>
+          <button class="theme-chip lang-chip" data-lang="es">🇪🇸 Español</button>
+        </div>
+      </section>
+
       <!-- Theme Selector -->
       <section class="theme-section torn-paper-card">
         <div class="pin pin-blue"></div>
@@ -163,23 +176,38 @@
         </div>
       </section>
 
-      <!-- Badges -->
+      <!-- Badges (Events wo me derby gsi isch) -->
       <section class="badges-section torn-paper-card">
-        <div class="tape tape-right"></div>
-        <h3 class="section-title marker-title">🎖️ Badges</h3>
+        <div class="tape tape-center"></div>
+        <h3 class="section-title marker-title">🎖️ Badges – Wo bisch derby gsi?</h3>
+        <p style="font-size:0.82rem;color:var(--text-light);margin-bottom:10px;">
+          Für jedes Event wo du derby bisch, kriegsch en Badge!
+        </p>
         <div id="badge-showcase" class="badge-grid"></div>
       </section>
 
-      <!-- Signature Sound -->
-      <section class="sound-section torn-paper-card">
+      <!-- Notification Settings -->
+      <section class="notif-section torn-paper-card">
         <div class="pin pin-red"></div>
-        <h3 class="section-title marker-title">🔊 Signature Sound</h3>
-        <div class="sound-controls">
-          <label class="btn-secondary btn-scrapbook" for="sound-upload">
-            MP3 ufelade
+        <h3 class="section-title marker-title">🔔 Benachrichtigunge</h3>
+        <div class="notif-controls">
+          <label class="toggle-row">
+            <span>Push-Nachrichte</span>
+            <input type="checkbox" id="notif-toggle" class="toggle-input" />
+            <span class="toggle-slider"></span>
           </label>
-          <input type="file" id="sound-upload" accept="audio/mp3" class="hidden" />
-          <button id="sound-play" class="btn-secondary btn-scrapbook" disabled>▶ Abspiilä</button>
+          <div id="notif-activities-section" class="hidden">
+            <label class="label-marker">Nur für bestimmti Aktivitäte:</label>
+            <div class="chip-row" id="notif-activity-chips">
+              <button class="chip notif-chip" data-value="🫖 Teere">🫖 Teere</button>
+              <button class="chip notif-chip" data-value="🍺 Eis zieh">🍺 Eis zieh</button>
+              <button class="chip notif-chip" data-value="🍕 Ässä">🍕 Ässä</button>
+              <button class="chip notif-chip" data-value="Sonstige">📌 Sonstige</button>
+            </div>
+            <p style="font-size:0.72rem;color:var(--text-light);margin-top:6px;">
+              Kei Chip gwählt = alli Aktivitäte
+            </p>
+          </div>
         </div>
       </section>
 
@@ -188,33 +216,37 @@
         <div class="tape tape-center"></div>
         <h3 class="section-title marker-title">📡 Ping / Buzzer</h3>
 
-        <!-- Ping Composer -->
         <div class="ping-composer">
           <label class="label-marker">Aktivität</label>
           <div class="chip-row" id="ping-activity-chips">
-            <button class="chip" data-value="🚬 Rauche">🚬 Rauche</button>
-            <button class="chip" data-value="🍺 Beerpong">🍺 Beerpong</button>
-            <button class="chip" data-value="🎮 Zocke">🎮 Zocke</button>
-            <button class="chip" data-value="🍕 Essä">🍕 Essä</button>
-            <button class="chip" data-value="custom">✏️ Anderes</button>
+            <button class="chip" data-value="🫖 Teere">🫖 Teere</button>
+            <button class="chip" data-value="🍺 Eis zieh">🍺 Eis zieh</button>
+            <button class="chip" data-value="🍕 Ässä">🍕 Ässä</button>
+            <button class="chip" data-value="custom">✏️ Sonstige</button>
           </div>
           <input type="text" id="ping-activity-custom" class="scrapbook-input hidden" placeholder="Was machsch?" />
 
           <label class="label-marker">Ort</label>
           <div class="chip-row" id="ping-location-chips">
-            <button class="chip" data-value="📍 Bi mir">📍 Bi mir</button>
-            <button class="chip" data-value="📍 Bahnhof">📍 Bahnhof</button>
-            <button class="chip" data-value="📍 Park">📍 Park</button>
+            <button class="chip" data-value="📍 TL">📍 TL</button>
+            <button class="chip" data-value="📍 Renzen">📍 Renzen</button>
+            <button class="chip" data-value="📍 Be mer">📍 Be mer</button>
+            <button class="chip" data-value="📍 Zitas">📍 Zitas</button>
+            <button class="chip" data-value="📍 Madcat">📍 Madcat</button>
+            <button class="chip" data-value="📍 CouCou">📍 CouCou</button>
+            <button class="chip" data-value="📍 Aare">📍 Aare</button>
+            <button class="chip" data-value="📍 Steigrill">📍 Steigrill</button>
             <button class="chip" data-value="custom">✏️ Anderswo</button>
           </div>
           <input type="text" id="ping-location-custom" class="scrapbook-input hidden" placeholder="Wo?" />
 
-          <label class="label-marker">Wänn?</label>
-          <div class="chip-row" id="ping-time-chips">
-            <button class="chip" data-value="Jetzt">⚡ Jetzt</button>
-            <button class="chip" data-value="In 15 Min">🕐 In 15 Min</button>
-            <button class="chip" data-value="In 30 Min">🕐 In 30 Min</button>
-            <button class="chip" data-value="In 1 Stund">🕐 In 1 Stund</button>
+          <label class="label-marker">Wie lang?</label>
+          <div class="chip-row" id="ping-duration-chips">
+            <button class="chip" data-value="15">⏱️ 15 Min</button>
+            <button class="chip" data-value="30">⏱️ 30 Min</button>
+            <button class="chip" data-value="60">⏱️ 1 Stund</button>
+            <button class="chip" data-value="120">⏱️ 2 Stund</button>
+            <button class="chip" data-value="999">⏱️ Länger</button>
           </div>
 
           <button id="ping-send" class="btn-primary btn-scrapbook ping-buzzer" disabled>
@@ -222,45 +254,49 @@
           </button>
         </div>
 
-        <!-- Active Pings Feed -->
         <div class="ping-feed">
           <h4 class="label-marker">Aktivi Pings</h4>
           <div id="ping-list" class="ping-list"></div>
         </div>
       </section>
 
-      <!-- Admin Section (hidden by default) -->
+      <!-- Admin Section -->
       <section id="admin-section" class="admin-section torn-paper-card hidden">
         <div class="tape tape-left"></div>
         <h3 class="section-title marker-title">🔧 Admin / Orga</h3>
 
-        <!-- Pending Users -->
         <div id="admin-pending" class="admin-block">
           <h4 class="label-marker">Pending Users</h4>
           <div id="pending-list"></div>
-        </div>
-
-        <!-- Event Editor -->
-        <div class="admin-block">
-          <h4 class="label-marker">Neus Event erstelle</h4>
-          <div class="event-editor">
-            <input type="text" id="edit-event-title" class="scrapbook-input" placeholder="Event-Titel" />
-            <textarea id="edit-event-desc" class="scrapbook-input" placeholder="Beschriibig"></textarea>
-            <input type="text" id="edit-event-location" class="scrapbook-input" placeholder="Ort" />
-            <input type="datetime-local" id="edit-event-date" class="scrapbook-input" />
-            <input type="number" id="edit-event-cost" class="scrapbook-input" placeholder="Kostä (CHF)" step="0.5" />
-            <div class="checkbox-row">
-              <label><input type="checkbox" id="edit-event-tournament" /> Turnier</label>
-              <label><input type="checkbox" id="edit-event-mandatory" /> Pflicht-RSVP</label>
-            </div>
-            <input type="file" id="edit-event-image" accept="image/*" />
-            <button id="save-event" class="btn-primary btn-scrapbook">📝 Event speicherä</button>
-          </div>
         </div>
       </section>
 
       <!-- Logout -->
       <button id="btn-logout" class="btn-secondary btn-scrapbook logout-btn">🚪 Usälogge</button>
+    </div>
+
+    <!-- ========== EVENT CREATE MODAL ========== -->
+    <div id="create-event-modal" class="modal-overlay hidden">
+      <div class="modal-card torn-paper-card">
+        <div class="pin pin-yellow"></div>
+        <h3 class="marker-title">📝 Neus Event</h3>
+        <div class="event-editor">
+          <input type="text" id="edit-event-title" class="scrapbook-input" placeholder="Event-Titel" />
+          <textarea id="edit-event-desc" class="scrapbook-input" placeholder="Beschriibig"></textarea>
+          <input type="text" id="edit-event-location" class="scrapbook-input" placeholder="Ort" />
+          <input type="datetime-local" id="edit-event-date" class="scrapbook-input" />
+          <input type="number" id="edit-event-cost" class="scrapbook-input" placeholder="Kostä (CHF)" step="0.5" />
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="edit-event-tournament" /> Turnier</label>
+            <label><input type="checkbox" id="edit-event-mandatory" /> Pflicht-RSVP</label>
+          </div>
+          <input type="file" id="edit-event-image" accept="image/*" />
+          <div class="modal-actions">
+            <button id="save-event" class="btn-primary btn-scrapbook">📝 Event speicherä</button>
+            <button id="cancel-event" class="btn-secondary btn-scrapbook">Abbräche</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ========== EVENT BOTTOM SHEET MODAL ========== -->
@@ -269,13 +305,11 @@
       <div class="bottom-sheet-content">
         <div class="bottom-sheet-handle"></div>
 
-        <!-- Modal Header -->
         <div class="modal-header">
           <h2 class="modal-title marker-title" id="modal-event-title">Event</h2>
           <button class="modal-close" id="modal-close">✕</button>
         </div>
 
-        <!-- Tabs -->
         <div class="modal-tabs">
           <button class="modal-tab active" data-tab="info">📋 Info</button>
           <button class="modal-tab" data-tab="batzen">💰 Batze</button>
@@ -305,12 +339,10 @@
           </div>
           <p class="event-desc" id="modal-description"></p>
 
-          <!-- Mandatory Warning -->
           <div id="modal-mandatory-warn" class="warn-banner hidden">
             ⚠️ Pflicht-Aamäldig! Bitte mäld di ah.
           </div>
 
-          <!-- RSVP -->
           <div class="rsvp-section">
             <h4 class="label-marker">Bisch derby?</h4>
             <div class="rsvp-controls">
@@ -318,13 +350,16 @@
               <button class="btn-secondary btn-scrapbook rsvp-btn" data-status="declined">❌ Chan nöd</button>
             </div>
             <div class="rsvp-extras">
-              <label><input type="checkbox" id="rsvp-plus-one" /> +1 mitnäh</label>
+              <label class="toggle-row">
+                <span>+1 mitnäh</span>
+                <input type="checkbox" id="rsvp-plus-one" class="toggle-input" />
+                <span class="toggle-slider"></span>
+              </label>
               <input type="text" id="rsvp-notes" class="scrapbook-input" placeholder="Allergien / Notize..." />
             </div>
             <div id="rsvp-list" class="rsvp-list"></div>
           </div>
 
-          <!-- Stimmungsbild (only past events) -->
           <div id="rating-section" class="rating-section hidden">
             <h4 class="label-marker">Stimmigsbild</h4>
             <div class="star-rating" id="star-rating">
@@ -340,15 +375,19 @@
 
         <!-- Tab: Batzenkonto -->
         <div class="modal-tab-content" data-tab-content="batzen">
+          <h4 class="label-marker">Quittunge</h4>
+          <div id="receipt-gallery" class="receipt-gallery"></div>
+
           <h4 class="label-marker">Transaktione</h4>
           <div id="transaction-list" class="transaction-list"></div>
 
           <div class="transaction-form">
             <input type="number" id="tx-amount" class="scrapbook-input" placeholder="Betrag (+ oder -)" step="0.5" />
             <input type="text" id="tx-desc" class="scrapbook-input" placeholder="Beschriibig" />
-            <div id="tx-receipt-wrap" class="hidden">
+            <div class="receipt-upload-row">
               <label class="btn-secondary btn-scrapbook" for="tx-receipt">📷 Quittung</label>
               <input type="file" id="tx-receipt" accept="image/*" class="hidden" />
+              <span id="tx-receipt-name" style="font-size:0.75rem;color:var(--text-light);"></span>
             </div>
             <button id="tx-save" class="btn-primary btn-scrapbook">💸 Buechä</button>
           </div>
@@ -382,21 +421,6 @@
       </div>
     </div>
 
-    <!-- ========== IDEA MODAL ========== -->
-    <div id="idea-modal" class="modal-overlay hidden">
-      <div class="modal-card torn-paper-card">
-        <div class="pin pin-yellow"></div>
-        <h3 class="marker-title">💡 Idee-Dropbox</h3>
-        <p class="modal-hint">100% anonym. Niemert weiss wer's gschriibe het.</p>
-        <textarea id="idea-text" class="scrapbook-input" placeholder="Dini Idee für s nächste Event..."></textarea>
-        <div class="modal-actions">
-          <button id="idea-submit" class="btn-primary btn-scrapbook">📮 Abschickä</button>
-          <button id="idea-close" class="btn-secondary btn-scrapbook">Abbräche</button>
-        </div>
-        <div id="idea-list" class="idea-list"></div>
-      </div>
-    </div>
-
     <!-- ========== PING NOTIFICATION (iOS-Style) ========== -->
     <div id="ping-notification" class="ping-notification hidden">
       <div class="ping-notif-inner">
@@ -423,7 +447,6 @@
     </nav>
   </div>
 
-  <!-- Scripts -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
